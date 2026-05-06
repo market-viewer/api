@@ -22,6 +22,10 @@ cp .env.docker .env
 ```
 > Note: Update environment variables for public API deployments. Default values are safe for local use only.
 
+> ⚠️ Note on Database Credentials:
+If you change the database credentials in your .env file after the application has already been started, you must fully reset the database environment for the changes to take effect. You can do this by running `sudo docker compose down -v`.
+Warning: This command removes the database volume and will permanently delete all your existing data.
+ 
 ---
 
 ## Running with Docker
