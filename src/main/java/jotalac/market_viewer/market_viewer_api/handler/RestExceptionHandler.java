@@ -67,7 +67,7 @@ public class RestExceptionHandler {
     }
 
     @ExceptionHandler(AuthException.class)
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
     public ErrorResponse authException(HttpServletRequest request, AuthException e) {
         return new ErrorResponse(LocalDateTime.now(), e.getMessage(), request.getRequestURI());
     }

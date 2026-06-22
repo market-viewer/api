@@ -36,4 +36,7 @@ public class User extends AbstractEntity {
     @Column(name = "oauth_provider_id")
     private String oauthProviderId;
 
+    @Column(nullable = false)
+    private int tokenVersion = 0;
+
 }

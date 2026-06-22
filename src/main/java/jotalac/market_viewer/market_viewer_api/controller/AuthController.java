@@ -33,8 +33,8 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<LoginResponseDto> login(@Valid @RequestBody LoginRequestDto loginRequestDto) {
-        LoginResponseDto loginResponse = authService.login(loginRequestDto);
+    public ResponseEntity<JwtTokensDto> login(@Valid @RequestBody LoginRequestDto loginRequestDto) {
+        JwtTokensDto loginResponse = authService.login(loginRequestDto);
 
         return  ResponseEntity.status(HttpStatus.OK).body(loginResponse);
     }
@@ -44,6 +44,13 @@ public class AuthController {
         authService.recoverAccount(recoverRequestDto);
 
         return ResponseEntity.status(HttpStatus.OK).body(new MessageResponse("Password updated successfully"));
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<JwtTokensDto> refreshToken(@Valid @RequestBody RefreshTokenDto refreshTokenDto) {
+        JwtTokensDto newTokens = authService.refreshTokens(refreshTokenDto);
+
+        return ResponseEntity.status(HttpStatus.OK).body(newTokens);
     }
 
     //sso endpoint for mobile devices - redirect to different uri

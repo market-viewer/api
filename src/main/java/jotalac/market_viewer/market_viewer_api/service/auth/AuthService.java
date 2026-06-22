@@ -1,12 +1,14 @@
 package jotalac.market_viewer.market_viewer_api.service.auth;
 
 
+import io.jsonwebtoken.ExpiredJwtException;
 import jotalac.market_viewer.market_viewer_api.dto.auth.*;
 import jotalac.market_viewer.market_viewer_api.dto.user.UserDtoMapper;
 import jotalac.market_viewer.market_viewer_api.entity.OAuthProvider;
 import jotalac.market_viewer.market_viewer_api.entity.User;
 import jotalac.market_viewer.market_viewer_api.exception.NotFoundException;
 import jotalac.market_viewer.market_viewer_api.exception.auth.AccountRecoverException;
+import jotalac.market_viewer.market_viewer_api.exception.auth.JwtException;
 import jotalac.market_viewer.market_viewer_api.exception.auth.LoginException;
 import jotalac.market_viewer.market_viewer_api.exception.auth.RegisterException;
 import jotalac.market_viewer.market_viewer_api.exception.user.UserAlreadyExistsException;
@@ -59,7 +61,7 @@ public class AuthService {
     }
 
     @Transactional
-    public LoginResponseDto login(LoginRequestDto request) {
+    public JwtTokensDto login(LoginRequestDto request) {
         try {
             Authentication authentication = authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(request.username(), request.password())
@@ -70,11 +72,48 @@ public class AuthService {
 
             User user = userRepository.findByUsername(request.username())
                     .orElseThrow(() -> new LoginException("Invalid username or password"));
-            String token = jwtService.generateToken(user.getId());
-            return new LoginResponseDto(token);
+
+            userRepository.increaseTokenVersion(user.getId());
+            Integer tokenVersion = userRepository.findTokenVersionById(user.getId());
+
+            String token = jwtService.generateToken(user.getId(), false, tokenVersion);
+            String refreshToken = jwtService.generateToken(user.getId(), true, tokenVersion);
+            return new JwtTokensDto(token, refreshToken);
         } catch(AuthenticationException e) {
             log.info(e.getMessage());
             throw new LoginException("Invalid username or password");
+        }
+    }
+
+    @Transactional
+    public JwtTokensDto refreshTokens(RefreshTokenDto refreshTokensDto) {
+        try {
+            boolean isTokenValid = jwtService.validateRefreshToken(refreshTokensDto.refreshToken());
+
+            if (!isTokenValid) {
+                throw new JwtException("Invalid refresh token");
+            }
+
+            Integer userId = jwtService.extractUserId(refreshTokensDto.refreshToken());
+
+            User user = userRepository.findById(userId)
+                    .orElseThrow(() -> new JwtException("Invalid refresh token"));
+
+            // verify token version hasn't been revoked
+            Integer tokenVersionInToken = jwtService.extractTokenVersion(refreshTokensDto.refreshToken());
+            if (tokenVersionInToken == null || !tokenVersionInToken.equals(user.getTokenVersion())) {
+                throw new JwtException("Refresh token has been revoked");
+            }
+
+            userRepository.increaseTokenVersion(userId);
+            Integer tokenVersion = userRepository.findTokenVersionById(userId);
+
+            String token = jwtService.generateToken(userId, false, tokenVersion);
+            String refreshToken = jwtService.generateToken(userId, true, tokenVersion);
+
+            return new JwtTokensDto(token, refreshToken);
+        } catch (ExpiredJwtException e) {
+            throw new JwtException("Refresh token expired");
         }
     }
 
@@ -95,6 +134,9 @@ public class AuthService {
         //change the password
         String hashedPassword = passwordEncoder.encode(recoverDto.newPassword());
         user.setPassword(hashedPassword);
+
+        //invalidate all existing tokens
+        userRepository.increaseTokenVersion(user.getId());
     }
 
     private void checkUserExists(String username) {

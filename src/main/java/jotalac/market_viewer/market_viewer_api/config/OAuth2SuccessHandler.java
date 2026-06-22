@@ -5,6 +5,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jotalac.market_viewer.market_viewer_api.entity.OAuthProvider;
 import jotalac.market_viewer.market_viewer_api.entity.User;
+import jotalac.market_viewer.market_viewer_api.repository.UserRepository;
 import jotalac.market_viewer.market_viewer_api.service.auth.AuthService;
 import jotalac.market_viewer.market_viewer_api.service.auth.JwtService;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +26,7 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
 
     private final JwtService jwtService;
     private final AuthService authService;
+    private final UserRepository userRepository;
 
     @Value("${FRONTEND_URL}")
     private String frontendUrl;
@@ -40,7 +42,11 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
 
         User user = authService.findOrCreateOAuthUser(username, provider, providerId);
 
-        String token = jwtService.generateToken(user.getId());
+        userRepository.increaseTokenVersion(user.getId());
+        Integer tokenVersion = userRepository.findTokenVersionById(user.getId());
+
+        String token = jwtService.generateToken(user.getId(), false, tokenVersion);
+        String refreshToken = jwtService.generateToken(user.getId(), true, tokenVersion);
 
         //choose redirect url based on device type
         boolean isMobile = false;
@@ -51,15 +57,17 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
                     .anyMatch(cookie -> "client_type".equals(cookie.getName()) && "mobile".equals(cookie.getValue()));
         }
 
+        String responseParams = "token=" + token + "&refreshToken=" + refreshToken;
+
         if (isMobile) {
-            redirectUrl = "marketviewer://sso/callback?token=" + token;
+            redirectUrl = "marketviewer://sso/callback?" + responseParams;
             // delete the used cookie
             Cookie deleteCookie = new Cookie("client_type", null);
             deleteCookie.setMaxAge(0);
             deleteCookie.setPath("/");
             response.addCookie(deleteCookie);
         } else {
-            redirectUrl = frontendUrl+"/oauth2/github/callback?token=" + token;
+            redirectUrl = frontendUrl+"/oauth2/github/callback?" + responseParams;
         }
 
         log.info("Redirect to: {}", redirectUrl);

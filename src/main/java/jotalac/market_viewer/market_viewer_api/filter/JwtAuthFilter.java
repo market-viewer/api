@@ -44,10 +44,24 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             if (authHeader != null && authHeader.startsWith("Bearer ")) {
                 jwt = authHeader.substring(7);
                 userId = jwtService.extractUserId(jwt);
+
+                String tokenType = jwtService.extractTokenType(jwt);
+                if (!"access".equals(tokenType)) {
+                    sendResponse("Invalid token type", response, request.getRequestURI());
+                    return;
+                }
             }
 
             if (userId != null && SecurityContextHolder.getContext().getAuthentication() == null) {
                 User user = userRepository.findById(userId).orElseThrow(() -> new UsernameNotFoundException("User not found"));
+
+                // check token version for revocation
+                Integer tokenVersion = jwtService.extractTokenVersion(jwt);
+                if (tokenVersion == null || !tokenVersion.equals(user.getTokenVersion())) {
+                    sendResponse("Token has been revoked", response, request.getRequestURI());
+                    return;
+                }
+
                 UserDetails userDetails = org.springframework.security.core.userdetails.User.builder()
                         .username(user.getUsername())
                         .password("")
