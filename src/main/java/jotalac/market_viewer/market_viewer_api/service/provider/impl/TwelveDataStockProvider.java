@@ -112,6 +112,7 @@ public class TwelveDataStockProvider implements StockDataProvider {
     }
 
     private void performSymbolValidation(String symbol, String apiKey) {
+        System.out.println("Validating symbol: " + symbol);
         JsonNode response = restClient.get()
                 .uri(uriBuilder -> uriBuilder
                         .path("price")
@@ -121,12 +122,14 @@ public class TwelveDataStockProvider implements StockDataProvider {
                 .retrieve()
                 //handle any error
                 .onStatus(HttpStatusCode::isError, (req, res) -> {
-                    throw new IllegalStateException("Twelve data API Error [" + res.getStatusCode() + "]: " + res.getBody());
+
+                    throw new AssetNameNotValid("Symbol " + symbol + " is not available");
                 })
                 .body(JsonNode.class);
 
+
         if (!isResponseValid(response)) {
-            throw new AssetNameNotValid("Symbol '" + symbol + "' not availible");
+            throw new AssetNameNotValid("Symbol '" + symbol + "' not available");
         }
     }
 
